@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two overlapping speaker waves: several apps playing at once. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,46h8l10,-9v34l-10,-9h-8z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M58,44c4,3 4,17 0,20"
+        android:strokeWidth="4"
+        android:strokeColor="#8FE3CF"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M64,38c8,6 8,26 0,32"
+        android:strokeWidth="4"
+        android:strokeColor="#FFD166"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M70,32c12,9 12,35 0,44"
+        android:strokeWidth="4"
+        android:strokeColor="#EF476F"
+        android:strokeLineCap="round" />
+</vector>
