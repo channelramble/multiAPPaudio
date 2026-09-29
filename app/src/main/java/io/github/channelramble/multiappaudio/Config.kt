@@ -16,6 +16,15 @@ class Config(private val prefs: SharedPreferences) {
         }.toMap()
         set(v) = prefs.edit().putStringSet(KEY_VOLUMES, v.map { "${it.key}=${it.value}" }.toSet()).apply()
 
+    fun setVolume(pkg: String, db: Float) {
+        volumes = volumes + (pkg to db)
+    }
+
+    /** Keep the helper, and with it the App volume notification, running even when idle. */
+    var volumeNotification: Boolean
+        get() = prefs.getBoolean(KEY_VOLUME_NOTIFICATION, true)
+        set(v) = prefs.edit().putBoolean(KEY_VOLUME_NOTIFICATION, v).apply()
+
     /** Apps set to "never take audio focus" (the ADB AppOps command); also protected by the guard. */
     var passThroughPackages: Set<String>
         get() = prefs.getStringSet(KEY_PASS_THROUGH, null)?.toSet() ?: DEFAULT_PASS_THROUGH
@@ -42,13 +51,14 @@ class Config(private val prefs: SharedPreferences) {
 
     /** Whether the background service has anything to do. */
     fun needsService(context: Context): Boolean {
-        if (volumes.values.any { it != 0f }) return true
+        if (volumeNotification || volumes.values.any { it != 0f }) return true
         val sessionFeatures = aaGuard || pauseOnCall || resumeAfterCall
         return sessionFeatures && hasNotificationAccess(context)
     }
 
     companion object {
         private const val KEY_VOLUMES = "volumes"
+        private const val KEY_VOLUME_NOTIFICATION = "volume_notification"
         private const val KEY_PASS_THROUGH = "pass_through_pkgs"
         private const val KEY_MUTED = "muted_pkgs"
         private const val KEY_GUARD = "aa_guard"

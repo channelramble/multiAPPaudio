@@ -67,8 +67,10 @@ Things to know:
 
 Adds what a command alone can't do:
 
-* **Per-app volume.** A slider per app, from 0% to 200%. It attaches a volume effect to that app's
-  audio, the way equalizer apps do.
+* **Per-app volume, from the notification shade.** Each app gets its own level, from 0% (silent)
+  to 200%. Expand the **App volume** notification for - and + buttons on whatever is playing, or
+  tap it for a panel of sliders over the app you're in. An **App volume** Quick Settings tile opens
+  the same panel. It attaches a volume effect to each app's audio, the way equalizer apps do.
 * **Pause/resume around calls.** It resumes what was playing when a call ends (working around the
   bug above) and pauses pass-through apps during calls.
 * **Undo automatic source switches.** While Android Auto is connected, if a pass-through app gets
@@ -90,10 +92,12 @@ Setup:
    * `DUMP` lets the app see which app owns each audio stream, for per-app volume and diagnostics.
    * Notification access lets it pause and resume media. Notifications themselves are never read.
    * Both grants survive reboots and app updates.
-3. Open the app and add apps under **Per-app volume**.
+3. Pull down the notification shade and use the **App volume** notification. To add the Quick
+   Settings tile, tap **Add Quick Settings tile** in the app.
 
-The app runs a small background service (with a minimisable notification) only while a feature
-needs it, and restarts it after boots and updates on its own.
+The app runs a small background service whose notification is the **App volume** control. It
+restarts after boots and updates on its own. If you switch the notification off in the app, the
+service only runs while per-app volume or the call and Android Auto helpers need it.
 
 Why each piece works the way it does, with AOSP source references, is in
 [`docs/RESEARCH.md`](docs/RESEARCH.md).
@@ -119,7 +123,8 @@ adb shell cmd appops set <pkg> PLAY_AUDIO default         # for each muted app
 adb reboot
 ```
 
-Uninstalling the app removes its grants and its per-app volume effects.
+Uninstalling the app removes its grants. Set every app back to 100% first: Android keeps a volume
+effect on an app that is playing at that moment, at its last level, until that app closes its audio.
 
 ## How it's built
 
@@ -127,7 +132,12 @@ Uninstalling the app removes its grants and its per-app volume effects.
   and every value is passed as a separate argument.
 * `app/` is a plain Android app with no dependencies and public APIs only:
   * `core/AudioDump.kt` reads `dumpsys audio` in-process via `Debug.dumpService` (needs `DUMP`).
+    Android 17 locks that dump behind signature permissions, so there it reads the track list from
+    `dumpsys media.audio_flinger` instead, which still only needs `DUMP`.
   * `core/AppVolumes.kt` attaches `DynamicsProcessing` to other apps' audio sessions.
+  * `core/ActiveApps.kt` works out which apps are playing, paused or recently played.
+  * `MixerNotification.kt`, `MixerActivity.kt` and `MixerTileService.kt` are the App volume
+    notification, slider panel and Quick Settings tile.
   * `core/CarWatcher.kt` detects Android Auto through its public car-connection provider.
   * `core/SessionWatcher.kt` and `core/AutoSwitchGuard.kt` control media sessions via
     notification access.

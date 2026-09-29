@@ -235,16 +235,26 @@ the app keeps playing silently.
   app's audio session.
 * The app attaches `android.media.audiofx.DynamicsProcessing` (public since API 28) and sets its
   input gain: negative to turn an app down, up to +6 dB with a limiter to boost it.
-* Finding each app's session ids takes `dumpsys audio`, which only needs
-  `android.permission.DUMP`. That is a development permission a user can grant once with
-  `pm grant`. The app reads it in-process through the public `Debug.dumpService("audio", …)`, no
-  shell involved.
-* PlaybackActivityMonitor lists every player as
-  `AudioPlaybackConfiguration piid:… u/pid:UID/PID state:… attr:… usage=… sessionId:N …` (same
-  format on Android 16 and 17).
+* Finding each app's session ids takes a system dump that needs `android.permission.DUMP`. That
+  is a development permission a user can grant once with `pm grant`. The app reads the dump
+  in-process through the public `Debug.dumpService(…)`, no shell involved:
+  * Up to Android 16, `dumpsys audio`. PlaybackActivityMonitor lists every player as
+    `AudioPlaybackConfiguration piid:… u/pid:UID/PID state:… attr:… usage=… sessionId:N …`.
+  * Android 17 locks AudioService's dump for apps: `Debug.dumpService("audio", …)` throws
+    `SecurityException: Access denied, requires: anyOf={MODIFY_AUDIO_ROUTING, QUERY_AUDIO_STATE,
+    MODIFY_AUDIO_SETTINGS_PRIVILEGED}`, and none of those can be granted over ADB (no
+    `development` flag). `dumpsys media.audio_flinger` still only needs `DUMP`, and each
+    playback thread lists its tracks as `Id Active pid/uid Session PortId State Flags Format
+    ChannelMask SampleRate StreamType Usage …`, with usage as the numeric `audio_usage_t`. The
+    app falls back to that. Verified on the Android 17 emulator image (CE2A.260420.019).
+  * AudioService's focus details (the multi-focus flag, an external focus policy) have no
+    AudioFlinger equivalent, so on Android 17 the app can't confirm them.
 * Limitations:
   * Effects live in the app's process, so a foreground service keeps them alive and it restarts at
-    boot. If it's killed, apps return to full volume until it restarts.
+    boot. If the process dies (an update, a crash), AudioFlinger keeps the effect pinned to the
+    other app's session, still at its last gain, until that app releases its audio. The restarted
+    helper takes the pinned effect over. Right after a restart that can briefly fail
+    (`INVALID_OPERATION` from `createEffect`), so failed sessions are retried with backoff.
   * Some low-latency (AAudio MMAP) game audio can't take effects.
   * Another equalizer app on the same session competes for control of the effect. The app requests
     top priority and logs if it loses control.

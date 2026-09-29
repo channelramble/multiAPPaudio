@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App volume notification colors. SystemUI inflates the notification with the system's
+     day/night configuration, so values-night applies whenever the shade is dark. -->
+<resources>
+    <color name="mixer_text">@android:color/system_neutral1_900</color>
+    <color name="mixer_text_secondary">@android:color/system_neutral2_700</color>
+    <color name="mixer_accent">@android:color/system_accent1_600</color>
+    <color name="mixer_track">@android:color/system_accent1_100</color>
+    <color name="mixer_button">@android:color/system_accent2_100</color>
+    <color name="mixer_on_button">@android:color/system_accent2_900</color>
+    <color name="mixer_ripple">#1F000000</color>
+</resources>

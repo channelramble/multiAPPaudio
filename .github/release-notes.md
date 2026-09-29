@@ -1,9 +1,19 @@
 Samsung-style multi-app audio, per-app volume and Android Auto fixes for stock Android (Pixel).
 **ADB only.** No root, no Shizuku. Every command is run once and persists across reboots.
 
-> Built from the Android 16 and 17 source and compiled against both, but not yet tested on a
-> device. If something doesn't behave, use **Diagnostics → Copy report** in the app and open an
-> issue with it.
+> Tested on the Android 14 and Android 17 emulators. If something doesn't behave on your device,
+> use **Diagnostics → Copy report** in the app and open an issue with it.
+
+### New in 0.3.0
+
+- **App volume from the notification shade.** Expand the App volume notification for - and +
+  buttons on each playing app, or tap it for sliders over whatever you're using. There's also an
+  App volume Quick Settings tile (**Add Quick Settings tile** in the app).
+- **Per-app volume works on Android 17.** Android 17 no longer lets apps read `dumpsys audio`, so
+  the app couldn't see what was playing. It now reads the audio engine's track list instead, with
+  the same one-time DUMP grant.
+- **Survives app updates.** Volume effects re-attach on their own after the app restarts.
+- **Simpler main screen.** One card per feature with a status line; details under **Read more**.
 
 > **Upgrading from v0.1.0:** uninstall it first. v0.1.0 was signed with a temporary key, so this
 > release can't install over it. From this release on, every update installs over the last one.
@@ -21,8 +31,8 @@ from the repo.
 
 ### Companion app (optional)
 
-Adds per-app volume sliders, pause/resume around calls, an Android Auto auto-switch guard, and
-diagnostics.
+Adds per-app volume (from the notification shade), pause/resume around calls, an Android Auto
+auto-switch guard, and diagnostics.
 
 1. Install `MultiAppAudio-*.apk` below.
 2. Grant it once:
@@ -30,7 +40,7 @@ diagnostics.
    adb shell pm grant io.github.channelramble.multiappaudio android.permission.DUMP
    adb shell cmd notification allow_listener io.github.channelramble.multiappaudio/io.github.channelramble.multiappaudio.MediaListener
    ```
-3. Open it and add apps under **Per-app volume**.
+3. Pull down the notification shade and use the **App volume** notification.
 
 Requirements: Android 12+ (built for Android 16/17).
 

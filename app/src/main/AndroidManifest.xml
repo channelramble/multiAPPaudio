@@ -3,7 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Granted once over ADB (`pm grant <app> android.permission.DUMP`); lets the app read
-         `dumpsys audio` to find which app owns each audio session. Persists across reboots. -->
+         `dumpsys audio` (or, on Android 17, `dumpsys media.audio_flinger`) to find which app owns
+         each audio session. Persists across reboots. -->
     <uses-permission
         android:name="android.permission.DUMP"
         tools:ignore="ProtectedPermissions" />
@@ -32,7 +33,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.DeviceDefault.DayNight">
+        android:theme="@style/Theme.MultiAppAudio">
 
         <activity
             android:name=".MainActivity"
@@ -44,13 +45,39 @@
             </intent-filter>
         </activity>
 
+        <!-- App volume panel: a sheet over the current app, in its own task so closing it goes
+             straight back to what was on screen. -->
+        <activity
+            android:name=".MixerActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@style/Theme.MultiAppAudio.Mixer" />
+
+        <!-- The App volume notification's - / + buttons. -->
+        <receiver
+            android:name=".MixerReceiver"
+            android:exported="false" />
+
+        <service
+            android:name=".MixerTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_mixer"
+            android:label="@string/mixer_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <service
             android:name=".AudioControlService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Keeps per-app volume effects attached to other apps' audio sessions and runs the Android Auto and call helpers." />
+                android:value="Keeps per-app volume effects attached to other apps' audio sessions, shows the per-app volume controls, and runs the Android Auto and call helpers." />
         </service>
 
         <!-- Only used so the user can grant notification access (media session control). -->
