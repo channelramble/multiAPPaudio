@@ -1,44 +1,41 @@
-Samsung-style multi-app audio for stock Android (Pixel), plus Android Auto fixes. No root: uses
-[Shizuku](https://shizuku.rikka.app/).
+Samsung-style multi-app audio, per-app volume and Android Auto fixes for stock Android (Pixel).
+**ADB only.** No root, no Shizuku. Every command is run once and persists across reboots.
 
-> First release. It's built from the Android 16 and 17 source and compiled against both, but it
-> hasn't been tested on a device yet. If something doesn't behave, use **Diagnostics → Copy
-> report** in the app and open an issue with it.
+> Built from the Android 16 and 17 source and compiled against both, but not yet tested on a
+> device. If something doesn't behave, use **Diagnostics → Copy report** in the app and open an
+> issue with it.
 
-### Requirements
+### Core setup (no app needed)
 
-- Android 12 or newer (built for Android 16/17 Pixels).
-- Shizuku installed and running. Wireless debugging is enough; no root.
-- Focus isolation (the Android Auto pass-through) needs Android 17. On Android 16, use the
-  AppOps option instead.
+```sh
+adb shell settings put system multi_audio_focus_enabled 1              # multi-app audio
+adb reboot                                                              # once
+adb shell cmd appops set com.google.android.youtube TAKE_AUDIO_FOCUS ignore   # Android Auto fix
+```
 
-### Install
+Mute an app: `adb shell cmd appops set <pkg> PLAY_AUDIO ignore`. Or use `adb/multiappaudio.sh`
+from the repo.
 
-1. Install and start **Shizuku**. Optional: turn on Shizuku's *start on boot* so the helper comes
-   back after reboots.
-2. Download `MultiAppAudio-*.apk` below and install it. Allow installs from your browser or file
-   manager if asked.
-3. Open **Multi-App Audio** and tap **Allow access** for Shizuku.
-4. Turn on **Let media apps play at the same time**. This stops the current playback once.
-5. For Android Auto: pick your pass-through apps (YouTube is preselected). You can try it at home
-   with **Diagnostics → Simulate an Android Auto session**.
+### Companion app (optional)
 
-### What's in it
+Adds per-app volume sliders, pause/resume around calls, an Android Auto auto-switch guard, and
+diagnostics.
 
-- **Multi-app audio.** Turns on Android's built-in multi audio focus mode. Android stores it and
-  re-applies it at every boot, so it keeps working without Shizuku running. Calls, alarms and
-  navigation prompts still interrupt.
-- **Focus repair.** Fixes the AOSP bug in that mode where music stays quiet or paused after a
-  navigation prompt or call.
-- **Android Auto.** Pass-through apps bypass Android Auto's focus rules (Android 17). Automatic
-  source swaps get undone, and pass-through apps pause during calls.
-- **AppOps fallback.** "Never take audio focus" per app, for Android 16.
-- **Diagnostics.** Event log and a `dumpsys audio` focus snapshot.
+1. Install `MultiAppAudio-*.apk` below.
+2. Grant it once:
+   ```sh
+   adb shell pm grant io.github.channelramble.multiappaudio android.permission.DUMP
+   adb shell cmd notification allow_listener io.github.channelramble.multiappaudio/io.github.channelramble.multiappaudio.MediaListener
+   ```
+3. Open it and add apps under **Per-app volume**.
 
-The findings behind each feature are in
+Requirements: Android 12+ (built for Android 16/17).
+
+The findings behind each piece are in
 [docs/RESEARCH.md](https://github.com/channelramble/multiAPPaudio/blob/HEAD/docs/RESEARCH.md).
 
 ### Undo
 
-Turn the switches off in the app, then uninstall. Or run
-`adb shell settings put system multi_audio_focus_enabled 0` and reboot.
+`adb shell settings put system multi_audio_focus_enabled 0`, then
+`adb shell cmd appops set <pkg> TAKE_AUDIO_FOCUS default` (and `PLAY_AUDIO default`) for each app
+you changed. Reboot, and uninstall the app.

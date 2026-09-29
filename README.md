@@ -1,51 +1,102 @@
 # Multi-App Audio
 
-Plays audio from several apps at once on stock Android (Pixel), like the Galaxy Z Fold's
-multi-app audio. It also works around Android Auto pausing YouTube and starting YouTube Music.
-No root is needed: it uses [Shizuku](https://shizuku.rikka.app/) for ADB-level access.
+Samsung-style multi-app audio for stock Android (Pixel), per-app volume like One UI's Sound
+Assistant, and a fix for Android Auto pausing YouTube and starting YouTube Music.
 
-> **Status:** I wrote this from the AOSP Android 16 and Android 17 source. It compiles against both
-> framework versions, but I haven't run it on a Pixel yet. The in-app **Diagnostics** section and
-> **Copy report** button are there so you can see what your device actually does.
+**ADB only.** No root and no Shizuku. You run a few `adb shell` commands **once**. Android stores
+each result and re-applies it at every boot, so you set it and forget it. The optional companion
+app adds per-app volume sliders and small helpers, using permissions you also grant once over ADB.
 
-## What it does
+> **Status:** built from the AOSP Android 16 and 17 source. The app compiles for both versions,
+> but it hasn't been tested on a device yet. The in-app **Diagnostics → Copy report** shows what
+> your phone actually does.
 
-| Feature | How | Needs Shizuku running? | Survives reboot? |
-|---|---|---|---|
-| **Multi-app audio**: media apps play at the same time. Calls, alarms and navigation still interrupt. | Turns on AOSP's built-in *multi audio focus* mode (`Settings.System.multi_audio_focus_enabled`). | Only to switch it on or off. | **Yes.** Android re-applies it at every boot, without the app. |
-| **Focus repair**: fixes the AOSP bug where music stays ducked (quiet) or paused after a navigation prompt or call. | The helper daemon watches focus. When the interruption ends, it clears the stuck duck and resumes what was playing. | Yes | Whenever the helper runs |
-| **Android Auto pass-through**: YouTube (or any app you pick) plays alongside other apps in the car, and Android Auto can't pause it. | Android 17's per-app **focus isolation**. It runs *before* Android Auto's focus policy. | Yes | Whenever the helper runs |
-| **Undo auto-switch**: if Android Auto replaces a pass-through app with another app seconds after it starts, the switch is undone. | The helper watches media sessions. At most 2 corrections per minute. | Yes | Whenever the helper runs |
-| **Never take focus (AppOps)**: fallback for Android 16. Selected apps never pause or get paused by others. | `appops TAKE_AUDIO_FOCUS ignore` | Only to change it | **Yes** |
-| **Diagnostics**: focus, media-session, playback and projection event log, plus a `dumpsys audio` focus snapshot. | Read-only focus follower | Yes | n/a |
+## Quick start (just ADB)
 
-Why the Android Auto features work the way they do, with source references, is in
+Enable USB or wireless debugging, connect, then:
+
+```sh
+# 1. Multi-app audio: media apps play at the same time. Reboot once; it stays on forever.
+adb shell settings put system multi_audio_focus_enabled 1
+adb reboot
+
+# 2. Android Auto fix: YouTube never takes audio focus, so Android Auto can't pause it or swap in
+#    YouTube Music, and it plays alongside other apps (in the car too).
+adb shell cmd appops set com.google.android.youtube TAKE_AUDIO_FOCUS ignore
+
+# 3. Optional: mute an app completely.
+adb shell cmd appops set com.instagram.android PLAY_AUDIO ignore
+```
+
+That's the whole core setup. Each command survives reboots and app updates, and nothing needs to
+keep running.
+
+Or use the helper script (macOS/Linux, or Windows via Git Bash/WSL):
+
+```sh
+./adb/multiappaudio.sh enable --reboot
+./adb/multiappaudio.sh passthrough com.google.android.youtube
+./adb/multiappaudio.sh mute com.instagram.android
+./adb/multiappaudio.sh status com.google.android.youtube
+```
+
+### What each command does
+
+| Command | Effect | Undo |
+|---|---|---|
+| `settings put system multi_audio_focus_enabled 1` + reboot | Android's built-in multi audio focus mode. Music and video apps stop pausing each other. Calls, alarms and navigation prompts still interrupt. | `… multi_audio_focus_enabled 0` + reboot |
+| `cmd appops set <pkg> TAKE_AUDIO_FOCUS ignore` | That app never takes audio focus. It doesn't pause other apps, isn't paused by them, and Android Auto doesn't see it start. | `… TAKE_AUDIO_FOCUS default` |
+| `cmd appops set <pkg> PLAY_AUDIO ignore` | Silences that app at the system level. | `… PLAY_AUDIO default` |
+
+Things to know:
+
+* **Stuck-quiet music.** With multi-app audio on, Android 16/17 has a bug: after a navigation
+  prompt, music can stay quieter until you pause and play it, and after a call, paused apps don't
+  resume by themselves. The companion app resumes after calls. Google's own fix is behind a flag
+  you can *try* to switch on. Newer builds may refuse it without root, which is harmless:
+  `adb shell device_config override media_audio android.media.audio.audio_focus_desktop true`,
+  then reboot.
+* **Apps that won't start.** Some players refuse to start when they're denied audio focus. If a
+  pass-through app won't play, run its undo command.
+* **Which apps `TAKE_AUDIO_FOCUS` affects.** On Android 16 it only applies to apps targeting
+  Android 15+. On Android 17 it covers almost everything.
+* **Android Auto settings.** Also worth doing once: in Android Auto's settings, turn off starting
+  media automatically. In YouTube Music, turn off letting external devices start playback.
+
+## Companion app (optional)
+
+Adds what a command alone can't do:
+
+* **Per-app volume.** A slider per app, from 0% to 200%. It attaches a volume effect to that app's
+  audio, the way equalizer apps do.
+* **Pause/resume around calls.** It resumes what was playing when a call ends (working around the
+  bug above) and pauses pass-through apps during calls.
+* **Undo automatic source switches.** While Android Auto is connected, if a pass-through app gets
+  replaced by another app within 15 s of starting, it switches back. At most twice a minute.
+* **Status, commands and diagnostics.** It shows whether each setting is active and gives
+  copy-ready commands for the apps you pick. The event log and a `dumpsys audio` focus snapshot
+  are in **Copy report**.
+
+Setup:
+
+1. Install the APK. Take it from [Releases](https://github.com/channelramble/multiAPPaudio/releases/latest),
+   or grab the `multi-app-audio-debug-apk` artifact from the latest *Build APK* run in Actions.
+2. Grant it two things, once:
+   ```sh
+   adb shell pm grant io.github.channelramble.multiappaudio android.permission.DUMP
+   adb shell cmd notification allow_listener io.github.channelramble.multiappaudio/io.github.channelramble.multiappaudio.MediaListener
+   ```
+   Or run `./adb/multiappaudio.sh setup-app`. What each grant is for:
+   * `DUMP` lets the app see which app owns each audio stream, for per-app volume and diagnostics.
+   * Notification access lets it pause and resume media. Notifications themselves are never read.
+   * Both grants survive reboots and app updates.
+3. Open the app and add apps under **Per-app volume**.
+
+The app runs a small background service (with a minimisable notification) only while a feature
+needs it, and restarts it after boots and updates on its own.
+
+Why each piece works the way it does, with AOSP source references, is in
 [`docs/RESEARCH.md`](docs/RESEARCH.md).
-
-## Install
-
-1. Install and start **Shizuku** (Play Store or GitHub). Follow its wireless-debugging setup
-   steps.
-   * Optional but recommended: in Shizuku, turn on **start on boot**. Shizuku 13.6+ can do this
-     without root on Android 13+ over Wi-Fi. It needs `WRITE_SECURE_SETTINGS` granted to Shizuku
-     once from a PC. Shizuku's own docs have the steps. With this on, the helper comes back by
-     itself after every reboot.
-2. Download `MultiAppAudio-*.apk` from the latest
-   [release](https://github.com/channelramble/multiAPPaudio/releases/latest) and install it.
-   You can also build it yourself (`./gradlew assembleDebug`).
-3. Open **Multi-App Audio**. Tap **Allow access** for Shizuku.
-4. Turn on **Let media apps play at the same time**. This stops the current playback once.
-5. Leave **Repair focus after interruptions** on.
-6. Android Auto:
-   * Pick your **pass-through apps** (YouTube is preselected).
-   * Android 17: keep **Pass-through apps ignore Android Auto's focus rules** on.
-   * Android 16: add the same apps under **Never take audio focus (AppOps)** instead.
-   * In Android Auto's settings, turn off the option that starts media automatically on connect.
-   * In YouTube Music, turn off letting external devices start playback.
-   * You can try all of this at home with **Diagnostics → Simulate an Android Auto session**.
-
-If something misbehaves in the car, open the app afterwards and tap **Copy report**. The event
-log shows who asked for focus, who got paused, and what the helper did.
 
 ### Verifying the APK
 
@@ -59,43 +110,25 @@ The same value is in [`.github/signing-cert.sha256`](.github/signing-cert.sha256
 workflow refuses to publish an APK signed with any other key. To check a download, run
 `apksigner verify --print-certs MultiAppAudio-*.apk`, or use an app such as AppVerifier.
 
-## Without the app (ADB only)
-
-The core feature is a single setting:
+## Undo everything
 
 ```sh
-adb shell settings put system multi_audio_focus_enabled 1   # then reboot
-adb shell settings put system multi_audio_focus_enabled 0   # undo, then reboot
+adb shell settings put system multi_audio_focus_enabled 0
+adb shell cmd appops set <pkg> TAKE_AUDIO_FOCUS default   # for each pass-through app
+adb shell cmd appops set <pkg> PLAY_AUDIO default         # for each muted app
+adb reboot
 ```
 
-It persists across reboots. Without the helper you also get the AOSP bug: music may stay ducked
-after a navigation prompt until you pause and resume it.
-
-Per-app "never take audio focus". On Android 16 this only affects apps targeting Android 15+;
-on Android 17 it covers almost everything. Some players then refuse to start:
-
-```sh
-adb shell cmd appops set com.google.android.youtube TAKE_AUDIO_FOCUS ignore
-adb shell cmd appops set com.google.android.youtube TAKE_AUDIO_FOCUS default   # undo
-```
-
-## Uninstall / undo
-
-Turn the switches off in the app, then uninstall. Nothing else is left behind: focus isolation
-ends when the helper exits. If you set AppOps from the app, un-select the apps first, or run the
-`default` command above.
+Uninstalling the app removes its grants and its per-app volume effects.
 
 ## How it's built
 
-* `app/…/daemon/` is the helper. Shizuku starts it as a *user service*, running as the shell uid
-  in its own process. It keeps running after the app closes and exits when Shizuku stops. The
-  permissions it relies on are all held by the ADB shell: `MODIFY_AUDIO_ROUTING`,
-  `MODIFY_AUDIO_SETTINGS_PRIVILEGED`, `QUERY_AUDIO_STATE`, `MEDIA_CONTENT_CONTROL`,
-  `READ_PROJECTION_STATE` and `DUMP`.
-* Hidden framework calls use reflection inside the daemon. Hidden-API restrictions don't apply to
-  `app_process`. The few `@SystemApi` classes it has to subclass are stubbed in `hidden-api/`.
-  That module is `compileOnly` and is never packaged.
-* The app itself only uses public APIs. It stores settings and pushes them to the daemon whenever
-  it (re)connects.
-* When Shizuku starts, it wakes every app that holds its permission. The app then restarts the
-  daemon, so the helper comes back after a reboot as soon as Shizuku does.
+* `adb/multiappaudio.sh` is a thin wrapper around the commands above. It validates package names,
+  and every value is passed as a separate argument.
+* `app/` is a plain Android app with no dependencies and public APIs only:
+  * `core/AudioDump.kt` reads `dumpsys audio` in-process via `Debug.dumpService` (needs `DUMP`).
+  * `core/AppVolumes.kt` attaches `DynamicsProcessing` to other apps' audio sessions.
+  * `core/CarWatcher.kt` detects Android Auto through its public car-connection provider.
+  * `core/SessionWatcher.kt` and `core/AutoSwitchGuard.kt` control media sessions via
+    notification access.
+  * `AudioControlService.kt` is the foreground service that hosts all of the above.

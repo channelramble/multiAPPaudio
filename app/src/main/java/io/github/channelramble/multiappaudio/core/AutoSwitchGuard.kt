@@ -1,4 +1,4 @@
-package io.github.channelramble.multiappaudio.daemon
+package io.github.channelramble.multiappaudio.core
 
 import android.media.session.PlaybackState
 import android.os.Handler

@@ -17,8 +17,8 @@ android {
         applicationId = "io.github.channelramble.multiappaudio"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     signingConfigs {
@@ -34,8 +34,6 @@ android {
 
     buildTypes {
         release {
-            // The helper daemon is loaded reflectively by Shizuku and reaches framework internals
-            // through reflection, so keep the code un-obfuscated.
             isMinifyEnabled = false
             if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
@@ -47,7 +45,7 @@ android {
     }
 
     lint {
-        // Hidden-API access is deliberate (it runs in the shell-uid helper, not the app).
+        // DUMP / QUERY_ALL_PACKAGES are deliberate (sideloaded app, DUMP granted over ADB).
         checkReleaseBuilds = false
         abortOnError = false
     }
@@ -57,11 +55,4 @@ kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
     }
-}
-
-dependencies {
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
-    // Stubs for AudioPolicy / AudioFocusInfo (@SystemApi); never packaged.
-    compileOnly(project(":hidden-api"))
 }

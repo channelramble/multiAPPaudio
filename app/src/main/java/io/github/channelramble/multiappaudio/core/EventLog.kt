@@ -1,4 +1,4 @@
-package io.github.channelramble.multiappaudio.daemon
+package io.github.channelramble.multiappaudio.core
 
 import android.util.Log
 import java.text.SimpleDateFormat
@@ -25,7 +25,7 @@ class EventLog(private val capacity: Int = 600) {
     @Synchronized
     fun clear() = lines.clear()
 
-    /** Runs a callback from the system, logging instead of crashing the daemon on failure. */
+    /** Runs a callback from the system, logging instead of crashing the service on failure. */
     inline fun guard(where: String, block: () -> Unit) {
         try {
             block()

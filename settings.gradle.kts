@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "MultiAppAudio"
-include(":app", ":hidden-api")
+include(":app")

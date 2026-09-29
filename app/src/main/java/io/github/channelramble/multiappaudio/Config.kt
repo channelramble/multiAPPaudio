@@ -1,73 +1,70 @@
 package io.github.channelramble.multiappaudio
 
+import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Bundle
 
-/**
- * User settings, persisted in the app's SharedPreferences and pushed to the helper daemon
- * every time it (re)connects. The daemon itself keeps no state across restarts.
- */
+/** User settings, persisted in SharedPreferences. */
 class Config(private val prefs: SharedPreferences) {
 
-    var helperEnabled: Boolean
-        get() = prefs.getBoolean(KEY_HELPER, true)
-        set(v) = prefs.edit().putBoolean(KEY_HELPER, v).apply()
+    /** package -> gain in dB (0 = unchanged). Kept even at 0 dB so the slider stays listed. */
+    var volumes: Map<String, Float>
+        get() = prefs.getStringSet(KEY_VOLUMES, emptySet()).orEmpty().mapNotNull { entry ->
+            val pkg = entry.substringBefore('=')
+            entry.substringAfter('=', "").toFloatOrNull()?.let { pkg to it }
+        }.toMap()
+        set(v) = prefs.edit().putStringSet(KEY_VOLUMES, v.map { "${it.key}=${it.value}" }.toSet()).apply()
 
-    var restoreHelper: Boolean
-        get() = prefs.getBoolean(Protocol.C_RESTORE_HELPER, true)
-        set(v) = prefs.edit().putBoolean(Protocol.C_RESTORE_HELPER, v).apply()
-
+    /** Apps set to "never take audio focus" (the ADB AppOps command); also protected by the guard. */
     var passThroughPackages: Set<String>
-        get() = prefs.getStringSet(Protocol.C_PASS_THROUGH_PKGS, null)?.toSet() ?: DEFAULT_PASS_THROUGH
-        set(v) = prefs.edit().putStringSet(Protocol.C_PASS_THROUGH_PKGS, v.toSet()).apply()
+        get() = prefs.getStringSet(KEY_PASS_THROUGH, null)?.toSet() ?: DEFAULT_PASS_THROUGH
+        set(v) = prefs.edit().putStringSet(KEY_PASS_THROUGH, v.toSet()).apply()
 
-    var aaIsolation: Boolean
-        get() = prefs.getBoolean(Protocol.C_AA_ISOLATION, true)
-        set(v) = prefs.edit().putBoolean(Protocol.C_AA_ISOLATION, v).apply()
-
-    var isolationAlways: Boolean
-        get() = prefs.getBoolean(Protocol.C_ISOLATION_ALWAYS, false)
-        set(v) = prefs.edit().putBoolean(Protocol.C_ISOLATION_ALWAYS, v).apply()
+    /** Apps the user wants muted completely (the ADB PLAY_AUDIO command). */
+    var mutedPackages: Set<String>
+        get() = prefs.getStringSet(KEY_MUTED, emptySet()).orEmpty().toSet()
+        set(v) = prefs.edit().putStringSet(KEY_MUTED, v.toSet()).apply()
 
     var aaGuard: Boolean
-        get() = prefs.getBoolean(Protocol.C_AA_GUARD, true)
-        set(v) = prefs.edit().putBoolean(Protocol.C_AA_GUARD, v).apply()
-
-    var guardWindowSeconds: Int
-        get() = prefs.getInt(Protocol.C_GUARD_WINDOW_S, 15)
-        set(v) = prefs.edit().putInt(Protocol.C_GUARD_WINDOW_S, v).apply()
+        get() = prefs.getBoolean(KEY_GUARD, true)
+        set(v) = prefs.edit().putBoolean(KEY_GUARD, v).apply()
 
     var pauseOnCall: Boolean
-        get() = prefs.getBoolean(Protocol.C_PAUSE_ON_CALL, true)
-        set(v) = prefs.edit().putBoolean(Protocol.C_PAUSE_ON_CALL, v).apply()
+        get() = prefs.getBoolean(KEY_PAUSE_ON_CALL, true)
+        set(v) = prefs.edit().putBoolean(KEY_PAUSE_ON_CALL, v).apply()
 
-    /** Packages the user asked us to put in the "never take audio focus" AppOps state. */
-    var appOpsPackages: Set<String>
-        get() = prefs.getStringSet(KEY_APPOPS, null)?.toSet() ?: emptySet()
-        set(v) = prefs.edit().putStringSet(KEY_APPOPS, v.toSet()).apply()
+    var resumeAfterCall: Boolean
+        get() = prefs.getBoolean(KEY_RESUME_AFTER_CALL, true)
+        set(v) = prefs.edit().putBoolean(KEY_RESUME_AFTER_CALL, v).apply()
 
-    fun toBundle(): Bundle = Bundle().apply {
-        putBoolean(Protocol.C_RESTORE_HELPER, restoreHelper)
-        putStringArray(Protocol.C_PASS_THROUGH_PKGS, passThroughPackages.sorted().toTypedArray())
-        putBoolean(Protocol.C_AA_ISOLATION, aaIsolation)
-        putBoolean(Protocol.C_ISOLATION_ALWAYS, isolationAlways)
-        putBoolean(Protocol.C_AA_GUARD, aaGuard)
-        putInt(Protocol.C_GUARD_WINDOW_S, guardWindowSeconds)
-        putBoolean(Protocol.C_PAUSE_ON_CALL, pauseOnCall)
+    val guardWindowSeconds: Int get() = 15
+
+    /** Whether the background service has anything to do. */
+    fun needsService(context: Context): Boolean {
+        if (volumes.values.any { it != 0f }) return true
+        val sessionFeatures = aaGuard || pauseOnCall || resumeAfterCall
+        return sessionFeatures && hasNotificationAccess(context)
     }
 
     companion object {
-        private const val KEY_HELPER = "helper_enabled"
-        private const val KEY_APPOPS = "appops_pkgs"
+        private const val KEY_VOLUMES = "volumes"
+        private const val KEY_PASS_THROUGH = "pass_through_pkgs"
+        private const val KEY_MUTED = "muted_pkgs"
+        private const val KEY_GUARD = "aa_guard"
+        private const val KEY_PAUSE_ON_CALL = "pause_on_call"
+        private const val KEY_RESUME_AFTER_CALL = "resume_after_call"
 
         const val YOUTUBE = "com.google.android.youtube"
-        const val YOUTUBE_MUSIC = "com.google.android.apps.youtube.music"
-        const val ANDROID_AUTO = "com.google.android.projection.gearhead"
-
         val DEFAULT_PASS_THROUGH = setOf(YOUTUBE)
 
         fun of(context: Context) =
             Config(context.getSharedPreferences("config", Context.MODE_PRIVATE))
+
+        fun listenerComponent(context: Context) = ComponentName(context, MediaListener::class.java)
+
+        fun hasNotificationAccess(context: Context): Boolean =
+            context.getSystemService(NotificationManager::class.java)
+                .isNotificationListenerAccessGranted(listenerComponent(context))
     }
 }

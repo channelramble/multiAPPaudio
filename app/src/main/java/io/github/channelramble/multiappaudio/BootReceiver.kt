@@ -5,14 +5,12 @@ import android.content.Context
 import android.content.Intent
 
 /**
- * Nothing here is required for the core feature: multi audio focus is a persisted system setting
- * that Android re-applies on every boot by itself. This only makes sure the optional helper comes
- * back when Shizuku is already up at boot (root / Sui) or after the app is updated. When Shizuku
- * starts later, it wakes this app on its own and [Helper] starts the daemon then.
+ * Brings the helper back after a reboot or an app update, so per-app volume and the call /
+ * Android Auto helpers keep working with nothing to re-run. (The ADB settings themselves are
+ * persisted by Android and need no process at all.)
  */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        Helper.init(context)
-        Helper.ensureRunning()
+        AudioControlService.refresh(context)
     }
 }

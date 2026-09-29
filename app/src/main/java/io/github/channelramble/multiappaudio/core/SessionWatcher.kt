@@ -1,5 +1,6 @@
-package io.github.channelramble.multiappaudio.daemon
+package io.github.channelramble.multiappaudio.core
 
+import android.content.ComponentName
 import android.content.Context
 import android.media.session.MediaController
 import android.media.session.MediaSession
@@ -9,11 +10,12 @@ import android.os.Handler
 import android.os.SystemClock
 
 /**
- * Follows every active MediaSession (the shell holds MEDIA_CONTENT_CONTROL, so no notification
- * listener is needed) and reports playback state transitions per package.
+ * Follows every active MediaSession and reports playback state transitions per package.
+ * Needs notification-listener access for [listenerComponent] (Settings, or one ADB command).
  */
 class SessionWatcher(
     context: Context,
+    private val listenerComponent: ComponentName,
     private val handler: Handler,
     private val log: EventLog,
     private val listener: Listener,
@@ -29,22 +31,31 @@ class SessionWatcher(
 
     private val manager = context.getSystemService(MediaSessionManager::class.java)
     private val tracked = HashMap<MediaSession.Token, Tracked>()
+    private var started = false
+
+    val isRunning: Boolean get() = started
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { list ->
         log.guard("sessions changed") { sync(list.orEmpty()) }
     }
 
-    fun start() {
-        try {
-            manager.addOnActiveSessionsChangedListener(sessionsListener, null, handler)
-            sync(manager.getActiveSessions(null))
+    /** Returns false when notification access hasn't been granted yet. */
+    fun start(): Boolean {
+        if (started) return true
+        return try {
+            manager.addOnActiveSessionsChangedListener(sessionsListener, listenerComponent, handler)
+            sync(manager.getActiveSessions(listenerComponent))
+            started = true
             log.add("session", "watching ${tracked.size} media session(s)")
-        } catch (t: Throwable) {
-            log.add("session", "media session access failed: $t")
+            true
+        } catch (e: SecurityException) {
+            false
         }
     }
 
     fun stop() {
+        if (!started) return
+        started = false
         runCatching { manager.removeOnActiveSessionsChangedListener(sessionsListener) }
         tracked.values.forEach { runCatching { it.controller.unregisterCallback(it.callback) } }
         tracked.clear()
@@ -71,6 +82,10 @@ class SessionWatcher(
         log.add("action", "pause() -> $pkg ($why)")
         return runCatching { t.controller.transportControls.pause(); true }.getOrDefault(false)
     }
+
+    fun playingPackages(): Set<String> =
+        tracked.values.filter { it.state == PlaybackState.STATE_PLAYING }
+            .map { it.controller.packageName }.toSet()
 
     fun summary(): Array<String> =
         tracked.values.map { "${it.controller.packageName}: ${stateName(it.state)}" }
