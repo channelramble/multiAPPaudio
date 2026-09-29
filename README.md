@@ -103,7 +103,7 @@ Why each piece works the way it does, with AOSP source references, is in
 Releases are signed with the project's release key. Its certificate SHA-256 is:
 
 ```
-8bb4f02affb116a7d016c6323015106a546f29da424934275ae5800752cadfed
+3bf35b33f7ec1bb42634e2dfa4fb144447701f2a5f57801f218b780324a86ee0
 ```
 
 The same value is in [`.github/signing-cert.sha256`](.github/signing-cert.sha256), and the release
