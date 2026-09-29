@@ -5,6 +5,9 @@ Samsung-style multi-app audio, per-app volume and Android Auto fixes for stock A
 > device. If something doesn't behave, use **Diagnostics → Copy report** in the app and open an
 > issue with it.
 
+> **Upgrading from v0.1.0:** uninstall it first. v0.1.0 was signed with a temporary key, so this
+> release can't install over it. From this release on, every update installs over the last one.
+
 ### Core setup (no app needed)
 
 ```sh
