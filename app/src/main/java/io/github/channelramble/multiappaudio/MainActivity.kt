@@ -281,6 +281,7 @@ class MainActivity : Activity() {
 
     private fun refresh() {
         renderLocal()
+        Helper.ensureRunning() // no-op when running; re-binds if the daemon died
         val client = Helper.client
         if (client == null) {
             status = null
