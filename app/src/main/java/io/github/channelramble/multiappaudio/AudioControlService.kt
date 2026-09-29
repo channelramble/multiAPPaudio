@@ -58,6 +58,7 @@ class AudioControlService : Service() {
     private val pausedByUs = HashSet<String>()
     private var dumpAvailable = false
     private var lastDump: AudioDump? = null
+    private var warnedNoDump = false
 
     private val playbackCallback = object : AudioManager.AudioPlaybackCallback() {
         override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
@@ -171,11 +172,13 @@ class AudioControlService : Service() {
         dumpAvailable = dump != null
         lastDump = dump ?: lastDump
         if (dump == null) {
-            if (volumes.targets.values.any { it != 0f }) {
+            if (!warnedNoDump && volumes.targets.values.any { it != 0f }) {
+                warnedNoDump = true
                 log.add("volume", "can't read audio sessions: grant DUMP once with: ${Adb.grantDump(this)}")
             }
             return
         }
+        warnedNoDump = false
         volumes.sync(dump.players)
     }
 
