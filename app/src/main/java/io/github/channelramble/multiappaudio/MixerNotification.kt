@@ -34,13 +34,18 @@ class MixerNotification(private val context: Context, private val labels: AppLab
         nm.deleteNotificationChannel(OLD_CHANNEL)
     }
 
-    /** [readable]: whether the last `dumpsys audio` read worked (see AudioDump.lastFailure). */
-    fun build(apps: List<ActiveApps.App>, volumes: Map<String, Float>, hasDump: Boolean, readable: Boolean): Notification {
-        val shown = apps.filter { it.state != ActiveApps.State.SAVED }.take(MAX_ROWS)
+    /**
+     * [readable]: whether the last `dumpsys audio` read worked (see AudioDump.lastFailure).
+     * [maxPercent]: top of the range, 100 or 200 (Config.maxPercent).
+     */
+    fun build(
+        apps: List<ActiveApps.App>, volumes: Map<String, Float>, hasDump: Boolean, readable: Boolean, maxPercent: Int,
+    ): Notification {
+        val shown = apps.take(MAX_ROWS)
         val summary = when {
             !hasDump -> "Grant DUMP over ADB to see which apps are playing"
             !readable -> "Can't see which apps are playing. Open the app for details"
-            shown.isEmpty() -> "Nothing playing. Tap to set app volumes"
+            shown.isEmpty() -> "Nothing playing right now"
             else -> shown.joinToString(" · ") { "${labels.label(it.pkg)} ${percentText(percent(volumes, it.pkg))}" }
         }
         val builder = Notification.Builder(context, CHANNEL)
@@ -55,12 +60,12 @@ class MixerNotification(private val context: Context, private val labels: AppLab
         if (shown.isNotEmpty()) {
             // Only the expanded view is custom; collapsed keeps the standard title + summary.
             builder.setStyle(Notification.DecoratedCustomViewStyle())
-                .setCustomBigContentView(expanded(shown, volumes))
+                .setCustomBigContentView(expanded(shown, volumes, maxPercent))
         }
         return builder.build()
     }
 
-    private fun expanded(apps: List<ActiveApps.App>, volumes: Map<String, Float>): RemoteViews {
+    private fun expanded(apps: List<ActiveApps.App>, volumes: Map<String, Float>, maxPercent: Int): RemoteViews {
         val root = RemoteViews(context.packageName, R.layout.mixer_notification)
         for (app in apps) {
             val name = labels.label(app.pkg)
@@ -70,19 +75,20 @@ class MixerNotification(private val context: Context, private val labels: AppLab
             row.setTextViewText(R.id.name, when {
                 app.blocked -> "$name · Can't adjust"
                 app.state == ActiveApps.State.PAUSED -> "$name · Paused"
+                app.state == ActiveApps.State.STOPPED -> "$name · Stopped"
                 else -> name
             })
             row.setTextViewText(R.id.percent, percentText(percent))
-            row.setProgressBar(R.id.level, AppVolumes.MAX_PERCENT, percent, false)
+            row.setProgressBar(R.id.level, maxPercent, percent, false)
             row.setOnClickPendingIntent(R.id.down, MixerReceiver.step(context, app.pkg, up = false))
             row.setOnClickPendingIntent(R.id.up, MixerReceiver.step(context, app.pkg, up = true))
             row.setContentDescription(R.id.down, "$name quieter")
             row.setContentDescription(R.id.up, "$name louder")
             row.setFloat(R.id.down, "setAlpha", if (percent > 0) 1f else DISABLED_ALPHA)
-            row.setFloat(R.id.up, "setAlpha", if (percent < AppVolumes.MAX_PERCENT) 1f else DISABLED_ALPHA)
+            row.setFloat(R.id.up, "setAlpha", if (percent < maxPercent) 1f else DISABLED_ALPHA)
             root.addView(R.id.rows, row)
         }
-        root.setTextViewText(R.id.hint, "Tap for sliders and more apps")
+        root.setTextViewText(R.id.hint, "Tap for sliders")
         return root
     }
 

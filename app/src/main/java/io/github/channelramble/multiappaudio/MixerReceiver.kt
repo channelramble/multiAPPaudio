@@ -17,7 +17,8 @@ class MixerReceiver : BroadcastReceiver() {
         val up = data.getQueryParameter(PARAM_DIR) == "up"
         val config = Config.of(context)
         val current = AppVolumes.dbToPercent(config.volumes[pkg] ?: 0f)
-        config.setVolume(pkg, AppVolumes.percentToDb(AppVolumes.stepPercent(current, up)))
+        val next = AppVolumes.stepPercent(current, up, config.maxPercent, config.volumeStep)
+        config.setVolume(pkg, AppVolumes.percentToDb(next))
         AudioControlService.volumesChanged(context)
     }
 

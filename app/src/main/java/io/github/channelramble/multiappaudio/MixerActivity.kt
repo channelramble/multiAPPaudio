@@ -37,13 +37,12 @@ import io.github.channelramble.multiappaudio.core.ActiveApps
 import io.github.channelramble.multiappaudio.core.AppLabels
 import io.github.channelramble.multiappaudio.core.AppVolumes
 import io.github.channelramble.multiappaudio.core.AudioDump
-import java.util.concurrent.Executors
 import kotlin.math.abs
 
 /**
- * The App volume panel: a sheet over whatever app is open, with a slider per app. It lists what's
- * playing or paused, what played recently and every app with a saved volume. Opened from the App
- * volume notification, the Quick Settings tile or the main screen; changes apply while you drag.
+ * The App volume panel: a sheet over whatever app is open, with a slider for each app that's
+ * playing. Opened from the App volume notification, the Quick Settings tile or the main screen;
+ * changes apply while you drag.
  */
 class MixerActivity : Activity() {
 
@@ -51,7 +50,6 @@ class MixerActivity : Activity() {
 
     private val config by lazy { Config.of(this) }
     private val labels by lazy { AppLabels(packageManager) }
-    private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val rows = HashMap<String, Row>()
     private val levelBeforeMute = HashMap<String, Int>()
@@ -116,11 +114,6 @@ class MixerActivity : Activity() {
         super.onStop()
         // A panel left behind (Home, screen off) would come back stale; start fresh next time.
         if (!isChangingConfigurations && !isFinishing) finish()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        io.shutdown()
     }
 
     @Deprecated("Back before Android 13, and on 13-15 without predictive back")
@@ -190,7 +183,7 @@ class MixerActivity : Activity() {
             addView(rowList)
         })
         emptyText = text(
-            "Nothing is playing right now. Start music or a video and it shows up here, or tap Choose apps.",
+            "Nothing is playing right now. Start music or a video and it shows up here.",
             14f, onSurfaceVariant,
         ).apply {
             setPadding(0, dp(12), 0, dp(12))
@@ -203,7 +196,6 @@ class MixerActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(4), 0, 0)
         }
-        footer.addView(flatButton("Choose apps") { chooseApps() })
         footer.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
         footer.addView(flatButton("Settings") { openSettings() })
         sheet.addView(footer)
@@ -246,8 +238,8 @@ class MixerActivity : Activity() {
         // Pulled left so the speaker lines up under the app icon.
         bottom.addView(mute, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = -dp(8) })
         val seek = SeekBar(this).apply {
-            max = AppVolumes.MAX_PERCENT
-            styleSlider(this)
+            max = config.maxPercent
+            styleSlider(this, notchAt100 = max > 100)
             contentDescription = "${labels.label(pkg)} volume"
         }
         bottom.addView(seek, LinearLayout.LayoutParams(0, dp(44), 1f))
@@ -271,10 +263,11 @@ class MixerActivity : Activity() {
 
             override fun onProgressChanged(s: SeekBar, value: Int, fromUser: Boolean) {
                 if (!fromUser) return
-                // Soft detent at 100% (unchanged), with a tick as you cross it.
-                val v = if (value != 100 && abs(value - 100) <= DETENT) 100 else value
+                // With boost on, 100% (unchanged) sits mid-track: a soft detent there, with a tick.
+                val boost = s.max > 100
+                val v = if (boost && value != 100 && abs(value - 100) <= DETENT) 100 else value
                 if (v != value) s.progress = v
-                if (v == 100 && !atDetent) s.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                if (boost && v == 100 && !atDetent) s.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 atDetent = v == 100
                 setLevel(pkg, v, fromSlider = true)
             }
@@ -351,21 +344,12 @@ class MixerActivity : Activity() {
             app.blocked -> "Can't adjust"
             app.state == ActiveApps.State.PLAYING -> "Playing"
             app.state == ActiveApps.State.PAUSED -> "Paused"
-            else -> ""
+            else -> "Stopped"
         }
         row.state.setTextColor(if (app.state == ActiveApps.State.PLAYING && !app.blocked) accent else onSurfaceVariant)
     }
 
     // ------------------------------------------------------------------------------ actions
-
-    private fun chooseApps() {
-        AppPicker.show(this, io, "Apps to keep in the list", config.volumes.keys) { chosen ->
-            val current = config.volumes
-            config.volumes = chosen.associateWith { current[it] ?: 0f }
-            AudioControlService.volumesChanged(this)
-            main.postDelayed({ render() }, RELIST_DELAY_MS)
-        }
-    }
 
     private fun openSettings() {
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -394,8 +378,8 @@ class MixerActivity : Activity() {
 
     // ------------------------------------------------------------------------------ helpers
 
-    /** Thicker track than the platform default, with a notch marking 100%. */
-    private fun styleSlider(seek: SeekBar) {
+    /** Thicker track than the platform default; with boost on, a notch marks 100% mid-track. */
+    private fun styleSlider(seek: SeekBar, notchAt100: Boolean) {
         val h = dp(6)
         val track = GradientDrawable().apply {
             cornerRadius = h / 2f
@@ -406,11 +390,14 @@ class MixerActivity : Activity() {
             setColor(accent)
         }, Gravity.START, ClipDrawable.HORIZONTAL)
         val notch = GradientDrawable().apply { setColor(surface) }
-        seek.progressDrawable = LayerDrawable(arrayOf<Drawable>(track, fill, notch)).apply {
+        val layers = if (notchAt100) arrayOf<Drawable>(track, fill, notch) else arrayOf<Drawable>(track, fill)
+        seek.progressDrawable = LayerDrawable(layers).apply {
             setId(0, android.R.id.background)
             setId(1, android.R.id.progress)
-            setLayerGravity(2, Gravity.CENTER)
-            setLayerSize(2, dp(2), h)
+            if (notchAt100) {
+                setLayerGravity(2, Gravity.CENTER)
+                setLayerSize(2, dp(2), h)
+            }
         }
         seek.minHeight = h
         seek.maxHeight = h
@@ -470,7 +457,6 @@ class MixerActivity : Activity() {
 
     companion object {
         private const val POLL_MS = 1_000L
-        private const val RELIST_DELAY_MS = 300L
         private const val ANIM_IN_MS = 260L
         private const val ANIM_OUT_MS = 180L
         private const val DETENT = 4

@@ -6,9 +6,11 @@ Samsung-style multi-app audio, per-app volume and Android Auto fixes for stock A
 
 ### New in 0.3.0
 
-- **App volume from the notification shade.** Expand the App volume notification for - and +
-  buttons on each playing app, or tap it for sliders over whatever you're using. There's also an
-  App volume Quick Settings tile (**Add Quick Settings tile** in the app).
+- **App volume from the notification shade.** It lists the apps playing right now. Expand the App
+  volume notification for - and + buttons, or tap it for sliders over whatever you're using.
+  There's also an App volume Quick Settings tile (**Add Quick Settings tile** in the app).
+- **0-100% by default.** Turn on **Allow boost above 100%** for up to 200%. Each - / + tap changes
+  the level by 10%; pick 5, 10, 20 or 25% in the app.
 - **Per-app volume works on Android 17.** Android 17 no longer lets apps read `dumpsys audio`, so
   the app couldn't see what was playing. It now reads the audio engine's track list instead, with
   the same one-time DUMP grant.

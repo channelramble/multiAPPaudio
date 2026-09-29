@@ -64,7 +64,7 @@ class AudioControlService : Service() {
     private var warnedNoDump = false
     private var lastNotificationKey: String? = null
 
-    /** What the quick controls list, in display order; published from the service thread. */
+    /** The apps playing right now (see ActiveApps), in display order; published from the service thread. */
     @Volatile
     var mixerApps: List<ActiveApps.App> = emptyList()
         private set
@@ -92,6 +92,9 @@ class AudioControlService : Service() {
     private val retryRescan = Runnable { scheduleRescan(0) }
 
     private val notificationUpdate = Runnable { log.guard("notification") { postNotification() } }
+
+    /** Drops apps that stopped playing a moment ago from the list. */
+    private val expireApps = Runnable { log.guard("expire apps") { publishApps() } }
 
     private val periodic = object : Runnable {
         override fun run() {
@@ -227,23 +230,27 @@ class AudioControlService : Service() {
     }
 
     private fun publishApps() {
+        val now = SystemClock.elapsedRealtime()
         val blocked = volumes.blockedPackages()
-        mixerApps = activeApps.list(Config.of(this).volumes.keys, SystemClock.elapsedRealtime(), labels::label)
-            .map { if (it.pkg in blocked) it.copy(blocked = true) else it }
+        mixerApps = activeApps.list(now, labels::label).map { if (it.pkg in blocked) it.copy(blocked = true) else it }
+        handler.removeCallbacks(expireApps)
+        activeApps.nextExpiry()?.let { handler.postDelayed(expireApps, (it - now).coerceAtLeast(0)) }
         handler.removeCallbacks(notificationUpdate)
         handler.postDelayed(notificationUpdate, NOTIFICATION_DEBOUNCE_MS)
     }
 
     private fun postNotification() {
-        val volumesNow = Config.of(this).volumes
+        val cfg = Config.of(this)
+        val volumesNow = cfg.volumes
+        val maxPercent = cfg.maxPercent
         val hasDump = AudioDump.hasPermission(this)
-        val key = "$hasDump|$canReadPlayers|" + mixerApps.joinToString {
+        val key = "$hasDump|$canReadPlayers|$maxPercent|" + mixerApps.joinToString {
             "${it.pkg}:${it.state}:${it.blocked}:${MixerNotification.percent(volumesNow, it.pkg)}"
         }
         if (key == lastNotificationKey) return
         lastNotificationKey = key
         getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, notification.build(mixerApps, volumesNow, hasDump, canReadPlayers))
+            .notify(NOTIFICATION_ID, notification.build(mixerApps, volumesNow, hasDump, canReadPlayers, maxPercent))
     }
 
     private fun rescanNow() {
@@ -329,7 +336,8 @@ class AudioControlService : Service() {
 
     private fun startInForeground() {
         notification.createChannel()
-        val first = notification.build(emptyList(), Config.of(this).volumes, AudioDump.hasPermission(this), readable = true)
+        val cfg = Config.of(this)
+        val first = notification.build(emptyList(), cfg.volumes, AudioDump.hasPermission(this), readable = true, cfg.maxPercent)
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(NOTIFICATION_ID, first, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {

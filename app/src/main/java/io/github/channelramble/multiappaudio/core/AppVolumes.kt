@@ -130,9 +130,6 @@ class AppVolumes(
         const val MAX_DB = 6f
         const val MAX_PERCENT = 200
 
-        /** Levels the notification's - / + buttons step through. */
-        private val STEPS = intArrayOf(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200)
-
         /** Slider percent (0..200) to gain; 100% is unchanged, 0% is effectively silent. */
         fun percentToDb(percent: Int): Float =
             if (percent <= 0) MIN_DB else (20 * log10(percent / 100.0)).toFloat().coerceIn(MIN_DB, MAX_DB)
@@ -141,7 +138,14 @@ class AppVolumes(
         fun dbToPercent(db: Float): Int =
             if (db <= MIN_DB) 0 else (100 * 10.0.pow(db / 20.0)).roundToInt().coerceIn(0, MAX_PERCENT)
 
-        fun stepPercent(current: Int, up: Boolean): Int =
-            if (up) STEPS.firstOrNull { it > current } ?: MAX_PERCENT else STEPS.lastOrNull { it < current } ?: 0
+        /**
+         * The next - / + level from [current]: the neighbouring multiple of [step] (so 67% goes to
+         * 70% or 60% in steps of 10), within 0..[max].
+         */
+        fun stepPercent(current: Int, up: Boolean, max: Int, step: Int): Int {
+            val now = current.coerceIn(0, max)
+            return if (up) ((now / step + 1) * step).coerceAtMost(max)
+            else ((now + step - 1) / step - 1).times(step).coerceAtLeast(0)
+        }
     }
 }

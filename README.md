@@ -67,10 +67,12 @@ Things to know:
 
 Adds what a command alone can't do:
 
-* **Per-app volume, from the notification shade.** Each app gets its own level, from 0% (silent)
-  to 200%. Expand the **App volume** notification for - and + buttons on whatever is playing, or
+* **Per-app volume, from the notification shade.** Each app that's playing gets its own level,
+  from 0% (silent) to 100% (its normal volume), or up to 200% with **Allow boost above 100%** on.
+  Expand the **App volume** notification for - and + buttons (10% a tap by default, adjustable), or
   tap it for a panel of sliders over the app you're in. An **App volume** Quick Settings tile opens
-  the same panel. It attaches a volume effect to each app's audio, the way equalizer apps do.
+  the same panel. Levels are remembered and apply whenever an app plays. It attaches a volume
+  effect to each app's audio, the way equalizer apps do.
 * **Pause/resume around calls.** It resumes what was playing when a call ends (working around the
   bug above) and pauses pass-through apps during calls.
 * **Undo automatic source switches.** While Android Auto is connected, if a pass-through app gets

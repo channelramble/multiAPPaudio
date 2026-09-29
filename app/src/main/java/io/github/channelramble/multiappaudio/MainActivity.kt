@@ -2,6 +2,7 @@ package io.github.channelramble.multiappaudio
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.StatusBarManager
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -102,8 +103,11 @@ class MainActivity : Activity() {
     private lateinit var setupMissing: CommandBlock
     private lateinit var setupDetail: TextView
     private lateinit var volumeStatus: TextView
+    private lateinit var resetVolumes: View
     private lateinit var volumeDetail: TextView
     private lateinit var notificationSwitch: Switch
+    private lateinit var boostSwitch: Switch
+    private lateinit var stepValue: TextView
     private lateinit var multiStatus: TextView
     private lateinit var multiTurnOn: CommandBlock
     private lateinit var resumeSwitch: Switch
@@ -205,7 +209,12 @@ class MainActivity : Activity() {
 
         column.addView(card("App volume") {
             volumeStatus = statusLine().also { addView(it) }
-            addView(summary("Turn single apps up or down, right from the notification shade."))
+            resetVolumes = flatButton("Reset all to 100%") {
+                config.resetVolumes()
+                AudioControlService.volumesChanged(this@MainActivity)
+                render()
+            }.also { addView(it) }
+            addView(summary("Turn apps that are playing up or down, right from the notification shade."))
             addView(button("Open App volume") { startActivity(Intent(this@MainActivity, MixerActivity::class.java)) })
             if (Build.VERSION.SDK_INT >= 33) addView(flatButton("Add Quick Settings tile") { requestTile() })
             notificationSwitch = switch("Keep the App volume notification", config.volumeNotification) { on ->
@@ -213,19 +222,45 @@ class MainActivity : Activity() {
                 AudioControlService.refresh(this@MainActivity)
             }
             addView(notificationSwitch)
+            boostSwitch = switch("Allow boost above 100%", config.allowBoost) { on ->
+                config.allowBoost = on
+                AudioControlService.volumesChanged(this@MainActivity)
+                render()
+            }
+            addView(boostSwitch)
+            stepValue = text("", 15f).apply { setTextColor(accent) }
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(12), 0, dp(12))
+                background = themeDrawable(android.R.attr.selectableItemBackground)
+                setOnClickListener { chooseStep() }
+                addView(
+                    text("Each - / + tap changes volume by", 15f).apply { setPadding(0, 0, dp(12), 0) },
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+                )
+                addView(stepValue)
+            })
             readMore {
                 volumeDetail = detail("").also { addView(it) }
                 addView(
                     detail(
                         "Expand the App volume notification for - and + buttons, or tap it for sliders. " +
-                            "The Quick Settings tile opens the same sliders."
+                            "The Quick Settings tile opens the same sliders. Only apps playing right now " +
+                            "are listed; an app's level is kept and applies again whenever it plays."
                     )
                 )
                 addView(
                     detail(
                         "It works like an equalizer app: a volume effect on each app's audio. 100% is " +
-                            "unchanged, 0% is silent, and up to 200% boosts, with a limiter so it can't " +
-                            "clip. Some low-latency game audio can't be adjusted."
+                            "the app's normal volume and 0% is silent. Some low-latency game audio can't " +
+                            "be adjusted."
+                    )
+                )
+                addView(
+                    detail(
+                        "Boost lets levels go up to 200%, with a limiter so it can't clip. With boost " +
+                            "off, boosted apps play at 100% and get their boost back when you turn it on."
                     )
                 )
                 addView(
@@ -429,7 +464,10 @@ class MainActivity : Activity() {
                 applied.isEmpty() -> "Waiting for those apps to play."
                 else -> "Applied to ${applied.size} active stream(s)."
             }
+            resetVolumes.visibility = if (changed.isEmpty()) View.GONE else View.VISIBLE
             notificationSwitch.isChecked = config.volumeNotification
+            boostSwitch.isChecked = config.allowBoost
+            stepValue.text = "${config.volumeStep}%"
 
             val stored = storedMultiFocus()
             val live = dump?.multiAudioFocusEnabled ?: snap?.multiFocusLive
@@ -536,6 +574,19 @@ class MainActivity : Activity() {
             }
             main.post { copy(report, "Report copied to the clipboard.") }
         }
+    }
+
+    private fun chooseStep() {
+        val steps = Config.VOLUME_STEPS
+        AlertDialog.Builder(this)
+            .setTitle("Each - / + tap changes volume by")
+            .setSingleChoiceItems(steps.map { "$it%" }.toTypedArray(), steps.indexOf(config.volumeStep)) { dialog, which ->
+                config.volumeStep = steps[which]
+                render()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun pickApps(title: String, current: Set<String>, onDone: (Set<String>) -> Unit) =
