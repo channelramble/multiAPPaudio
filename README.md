@@ -47,6 +47,18 @@ Why the Android Auto features work the way they do, with source references, is i
 If something misbehaves in the car, open the app afterwards and tap **Copy report**. The event
 log shows who asked for focus, who got paused, and what the helper did.
 
+### Verifying the APK
+
+Releases are signed with the project's release key. Its certificate SHA-256 is:
+
+```
+8bb4f02affb116a7d016c6323015106a546f29da424934275ae5800752cadfed
+```
+
+The same value is in [`.github/signing-cert.sha256`](.github/signing-cert.sha256), and the release
+workflow refuses to publish an APK signed with any other key. To check a download, run
+`apksigner verify --print-certs MultiAppAudio-*.apk`, or use an app such as AppVerifier.
+
 ## Without the app (ADB only)
 
 The core feature is a single setting:

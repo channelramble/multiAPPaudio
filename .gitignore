@@ -9,3 +9,9 @@ build/
 .cxx/
 *.apk
 *.aab
+
+# Signing material must never be committed.
+*.jks
+*.p12
+*.keystore
+release-signing-secrets.txt

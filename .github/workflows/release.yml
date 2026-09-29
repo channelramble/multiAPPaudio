@@ -3,13 +3,15 @@ name: Release
 # Push a tag like v0.1.0 (or run manually with a tag name) to build a signed release APK and
 # publish it as a GitHub Release.
 #
-# Signing: add these repository secrets for a stable signing key, so future releases install as
-# updates over earlier ones:
-#   RELEASE_KEYSTORE_BASE64   base64 of a .jks/.p12 keystore
+# Signing uses the stable release key from these repository secrets, so every release installs
+# as an update over the previous one:
+#   RELEASE_KEYSTORE_BASE64   base64 of the PKCS12 keystore
 #   RELEASE_KEYSTORE_PASSWORD
 #   RELEASE_KEY_ALIAS
 #   RELEASE_KEY_PASSWORD
-# Without them, the job signs with a freshly generated one-off key and says so in the notes.
+# The signed APK's certificate must match .github/signing-cert.sha256, so a wrong or rotated key
+# fails the job instead of shipping an APK that can't update existing installs.
+# If the secrets are missing the job fails, unless a manual run explicitly allows a one-off key.
 
 on:
   push:
@@ -19,6 +21,10 @@ on:
       tag:
         description: "Tag to create and release (e.g. v0.1.0)"
         required: true
+      allow_one_off_key:
+        description: "Sign with a throwaway key if the release key secrets are missing (installs won't update)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -47,14 +53,15 @@ jobs:
         run: |
           ks="$RUNNER_TEMP/release.keystore"
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$ks"
+            # Tolerate line breaks or spaces introduced when pasting the secret.
+            printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$ks"
             {
               echo "MMA_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
               echo "MMA_KEY_ALIAS=$KEY_ALIAS"
               echo "MMA_KEY_PASSWORD=$KEY_PASSWORD"
               echo "SIGNING=stable"
             } >> "$GITHUB_ENV"
-          else
+          elif [ "${{ inputs.allow_one_off_key }}" = "true" ]; then
             pw="$(openssl rand -hex 24)"
             echo "::add-mask::$pw"
             keytool -genkeypair -noprompt -storetype PKCS12 -keystore "$ks" \
@@ -66,6 +73,9 @@ jobs:
               echo "MMA_KEY_PASSWORD=$pw"
               echo "SIGNING=one-off"
             } >> "$GITHUB_ENV"
+          else
+            echo "::error::Release key secrets (RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD) are not set. Add them under Settings > Secrets and variables > Actions."
+            exit 1
           fi
           echo "MMA_KEYSTORE=$ks" >> "$GITHUB_ENV"
 
@@ -82,7 +92,15 @@ jobs:
           cp "$apk" "$out"
           sha256sum "$out" > "$out.sha256"
           echo "APK=$out" >> "$GITHUB_ENV"
-          echo "CERT_SHA256=$(grep -m1 'certificate SHA-256 digest' signature.txt | awk '{print $NF}')" >> "$GITHUB_ENV"
+          cert="$(grep -m1 'certificate SHA-256 digest' signature.txt | awk '{print $NF}')"
+          echo "CERT_SHA256=$cert" >> "$GITHUB_ENV"
+          if [ "$SIGNING" = "stable" ]; then
+            expected="$(tr -d '[:space:]' < .github/signing-cert.sha256)"
+            if [ "$cert" != "$expected" ]; then
+              echo "::error::Signing certificate $cert does not match the pinned $expected (.github/signing-cert.sha256)."
+              exit 1
+            fi
+          fi
 
       - name: Write release notes
         run: |
