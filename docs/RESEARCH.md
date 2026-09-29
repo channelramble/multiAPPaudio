@@ -245,8 +245,10 @@ the app keeps playing silently.
     MODIFY_AUDIO_SETTINGS_PRIVILEGED}`, and none of those can be granted over ADB (no
     `development` flag). `dumpsys media.audio_flinger` still only needs `DUMP`, and each
     playback thread lists its tracks as `Id Active pid/uid Session PortId State Flags Format
-    ChannelMask SampleRate StreamType Usage …`, with usage as the numeric `audio_usage_t`. The
-    app falls back to that. Verified on the Android 17 emulator image (CE2A.260420.019).
+    ChannelMask SampleRate StreamType Usage …`, with usage as `audio_usage_t` in hex. Builds
+    differ after the sample rate (the Pixel 10 Pro Fold's CP3A.260905.009 adds an `x` column), so
+    the app finds the usage column from the header line. The app falls back to that. Verified on
+    the Android 17 emulator image (CE2A.260420.019) and a Pixel 10 Pro Fold (CP3A.260905.009).
   * AudioService's focus details (the multi-focus flag, an external focus policy) have no
     AudioFlinger equivalent, so on Android 17 the app can't confirm them.
 * Limitations:

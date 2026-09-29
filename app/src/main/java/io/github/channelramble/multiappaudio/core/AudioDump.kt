@@ -76,12 +76,20 @@ class AudioDump private constructor(private val raw: String, val source: String)
 
         /**
          * A playback track line (Track::appendDump): optional fast-track index and type letter, then
-         * `Id Active pid/uid Session PortId State Flags Format ChannelMask SampleRate StreamType Usage`.
-         * Log lines start with a date and record tracks with yes/no, so neither matches.
+         * `Id Active pid/uid Session PortId State Flags Format ChannelMask`, then the rest (sample
+         * rate, stream type, usage, ...). Log lines start with a date and record tracks with yes/no,
+         * so neither matches.
          */
         private val TRACK = Regex(
-            """^\s*(?:F\d+\s+)?(?:[A-Z?]\s+)?(\d+)\s+(yes|no)\s+(\d+)/\s*(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S{1,2})\s+0x\p{XDigit}+\s+\p{XDigit}+\s+\p{XDigit}+\s+\d+\s+-?\d+\s+(\d+)\s"""
+            """^\s*(?:F\d+\s+)?(?:[A-Z?]\s+)?(\d+)\s+(yes|no)\s+(\d+)/\s*(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S{1,2})\s+0x\p{XDigit}+\s+\p{XDigit}+\s+\p{XDigit}+\s+(.*)$"""
         )
+        private val WHITESPACE = Regex("\\s+")
+
+        /**
+         * Where the usage sits after the sample rate. Builds differ ("SRate ST Usg" on the Android
+         * 17 emulator, "SRate x ST Usg" on a Pixel 10), so it's read from the column header.
+         */
+        private const val DEFAULT_USAGE_OFFSET = 2
 
         /** audio_usage_t values, named like AudioAttributes.usageToString. */
         private val USAGE_NAMES = mapOf(
@@ -202,12 +210,24 @@ class AudioDump private constructor(private val raw: String, val source: String)
             }
             .toList()
 
-        /** Playback tracks from AudioFlinger's thread dump, with states mapped to AudioService's names. */
-        private fun audioFlingerTracks(raw: String): List<Player> = raw.lineSequence()
-            .mapNotNull { TRACK.find(it)?.groupValues }
-            .map { g ->
-                val usage = g[8].toInt()
-                Player(
+        /**
+         * Playback tracks from AudioFlinger's thread dump, with states mapped to AudioService's
+         * names. The usage column is printed in hex (`%3x`).
+         */
+        private fun audioFlingerTracks(raw: String): List<Player> {
+            val tracks = ArrayList<Player>()
+            var usageOffset = DEFAULT_USAGE_OFFSET
+            for (line in raw.lineSequence()) {
+                if (line.contains("Client(pid/uid)") && line.contains("SRate")) {
+                    val names = line.trim().split(WHITESPACE)
+                    val rate = names.indexOf("SRate")
+                    val usg = names.indexOf("Usg")
+                    if (rate >= 0 && usg > rate) usageOffset = usg - rate
+                    continue
+                }
+                val g = TRACK.find(line)?.groupValues ?: continue
+                val usage = g[8].trim().split(WHITESPACE).getOrNull(usageOffset)?.toIntOrNull(16) ?: -1
+                tracks += Player(
                     piid = g[1].toInt(),
                     uid = g[4].toInt(),
                     pid = g[3].toInt(),
@@ -223,6 +243,7 @@ class AudioDump private constructor(private val raw: String, val source: String)
                     muted = "",
                 )
             }
-            .toList()
+            return tracks
+        }
     }
 }
