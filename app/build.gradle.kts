@@ -5,6 +5,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Release signing comes from the environment (set by .github/workflows/release.yml). Without it,
+// local release builds are simply left unsigned.
+val releaseKeystore: String? = System.getenv("MMA_KEYSTORE")
+
 android {
     namespace = "io.github.channelramble.multiappaudio"
     compileSdk = 36
@@ -17,11 +21,23 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("MMA_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("MMA_KEY_ALIAS")
+                keyPassword = System.getenv("MMA_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             // The helper daemon is loaded reflectively by Shizuku and reaches framework internals
             // through reflection, so keep the code un-obfuscated.
             isMinifyEnabled = false
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 

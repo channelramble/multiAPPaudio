@@ -30,8 +30,9 @@ Why the Android Auto features work the way they do, with source references, is i
      without root on Android 13+ over Wi-Fi. It needs `WRITE_SECURE_SETTINGS` granted to Shizuku
      once from a PC. Shizuku's own docs have the steps. With this on, the helper comes back by
      itself after every reboot.
-2. Install the APK. Take the latest **multi-app-audio-debug-apk** artifact from the repo's
-   *Actions* tab, or build it yourself (`./gradlew assembleDebug`).
+2. Download `MultiAppAudio-*.apk` from the latest
+   [release](https://github.com/channelramble/multiAPPaudio/releases/latest) and install it.
+   You can also build it yourself (`./gradlew assembleDebug`).
 3. Open **Multi-App Audio**. Tap **Allow access** for Shizuku.
 4. Turn on **Let media apps play at the same time**. This stops the current playback once.
 5. Leave **Repair focus after interruptions** on.

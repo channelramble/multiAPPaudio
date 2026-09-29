@@ -1,0 +1,112 @@
+name: Release
+
+# Push a tag like v0.1.0 (or run manually with a tag name) to build a signed release APK and
+# publish it as a GitHub Release.
+#
+# Signing: add these repository secrets for a stable signing key, so future releases install as
+# updates over earlier ones:
+#   RELEASE_KEYSTORE_BASE64   base64 of a .jks/.p12 keystore
+#   RELEASE_KEYSTORE_PASSWORD
+#   RELEASE_KEY_ALIAS
+#   RELEASE_KEY_PASSWORD
+# Without them, the job signs with a freshly generated one-off key and says so in the notes.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create and release (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          ks="$RUNNER_TEMP/release.keystore"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$ks"
+            {
+              echo "MMA_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+              echo "MMA_KEY_ALIAS=$KEY_ALIAS"
+              echo "MMA_KEY_PASSWORD=$KEY_PASSWORD"
+              echo "SIGNING=stable"
+            } >> "$GITHUB_ENV"
+          else
+            pw="$(openssl rand -hex 24)"
+            echo "::add-mask::$pw"
+            keytool -genkeypair -noprompt -storetype PKCS12 -keystore "$ks" \
+              -alias multiappaudio -keyalg RSA -keysize 4096 -validity 10000 \
+              -storepass "$pw" -keypass "$pw" -dname "CN=Multi-App Audio, O=channelramble"
+            {
+              echo "MMA_KEYSTORE_PASSWORD=$pw"
+              echo "MMA_KEY_ALIAS=multiappaudio"
+              echo "MMA_KEY_PASSWORD=$pw"
+              echo "SIGNING=one-off"
+            } >> "$GITHUB_ENV"
+          fi
+          echo "MMA_KEYSTORE=$ks" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Verify signature and package
+        run: |
+          apk="app/build/outputs/apk/release/app-release.apk"
+          test -f "$apk"
+          bt="$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$ANDROID_HOME/build-tools/$bt/apksigner" verify --verbose --print-certs "$apk" | tee signature.txt
+          out="MultiAppAudio-${TAG}.apk"
+          cp "$apk" "$out"
+          sha256sum "$out" > "$out.sha256"
+          echo "APK=$out" >> "$GITHUB_ENV"
+          echo "CERT_SHA256=$(grep -m1 'certificate SHA-256 digest' signature.txt | awk '{print $NF}')" >> "$GITHUB_ENV"
+
+      - name: Write release notes
+        run: |
+          cp .github/release-notes.md notes.md
+          {
+            echo
+            echo "### Verification"
+            echo
+            echo "- APK SHA-256: \`$(cut -d' ' -f1 "$APK.sha256")\`"
+            echo "- Signing certificate SHA-256: \`$CERT_SHA256\`"
+            if [ "$SIGNING" = "one-off" ]; then
+              echo "- Signed with a one-off key generated for this build. A later release signed"
+              echo "  with a different key won't install over this one; uninstall first in that case."
+            fi
+          } >> notes.md
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" "$APK" "$APK.sha256" \
+              --title "Multi-App Audio $TAG" --notes-file notes.md --target "$GITHUB_SHA"
+          fi
