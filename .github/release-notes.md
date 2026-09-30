@@ -1,14 +1,12 @@
-Samsung-style multi-app audio, per-app volume and Android Auto fixes for stock Android (Pixel).
-**ADB only.** No root, no Shizuku. Every command is run once and persists across reboots.
-
-> Tested on the Android 14 and Android 17 emulators. If something doesn't behave on your device,
-> use **Diagnostics → Copy report** in the app and open an issue with it.
+**Set each app's volume, 0-100%, right from the notification shade.** Multi-App Audio also lets
+several apps play at the same time and stops Android Auto from pausing YouTube. For Pixels and
+other phones running stock Android 12 or newer. No root: a one-time setup over ADB unlocks it.
 
 ### New in 0.3.0
 
 - **App volume from the notification shade.** It lists the apps playing right now. Expand the App
   volume notification for - and + buttons, or tap it for sliders over whatever you're using.
-  There's also an App volume Quick Settings tile (**Add Quick Settings tile** in the app).
+  There's also an App volume Quick Settings tile.
 - **0-100% by default.** Turn on **Allow boost above 100%** for up to 200%. Each - / + tap changes
   the level by 10%; pick 5, 10, 20 or 25% in the app.
 - **Per-app volume works on Android 17.** Android 17 no longer lets apps read `dumpsys audio`, so
@@ -18,39 +16,31 @@ Samsung-style multi-app audio, per-app volume and Android Auto fixes for stock A
 - **Simpler main screen.** One card per feature with a status line; details under **Read more**.
 
 > **Upgrading from v0.1.0:** uninstall it first. v0.1.0 was signed with a temporary key, so this
-> release can't install over it. From this release on, every update installs over the last one.
+> release can't install over it. From v0.2.0 on, every update installs over the last one.
 
-### Core setup (no app needed)
+### Install
+
+With USB debugging on and the phone plugged in, run these once:
 
 ```sh
-adb shell settings put system multi_audio_focus_enabled 1              # multi-app audio
-adb reboot                                                              # once
-adb shell cmd appops set com.google.android.youtube TAKE_AUDIO_FOCUS ignore   # Android Auto fix
+# Download and install the app
+curl -LO https://github.com/channelramble/multiAPPaudio/releases/latest/download/MultiAppAudio.apk
+adb install -r MultiAppAudio.apk
+
+# One-time setup for the app
+adb shell pm grant io.github.channelramble.multiappaudio android.permission.POST_NOTIFICATIONS
+adb shell pm grant io.github.channelramble.multiappaudio android.permission.DUMP
+adb shell cmd notification allow_listener io.github.channelramble.multiappaudio/io.github.channelramble.multiappaudio.MediaListener
+adb shell cmd statusbar add-tile io.github.channelramble.multiappaudio/.MixerTileService
+adb shell cmd appops set com.google.android.youtube TAKE_AUDIO_FOCUS ignore
+adb shell settings put system multi_audio_focus_enabled 1
+adb reboot
 ```
 
-Mute an app: `adb shell cmd appops set <pkg> PLAY_AUDIO ignore`. Or use `adb/multiappaudio.sh`
-from the repo.
+After the reboot, pull down the notification shade and start something playing. Already on
+v0.2.0 or later? Just install the new APK; the setup carries over.
 
-### Companion app (optional)
-
-Adds per-app volume (from the notification shade), pause/resume around calls, an Android Auto
-auto-switch guard, and diagnostics.
-
-1. Install `MultiAppAudio-*.apk` below.
-2. Grant it once:
-   ```sh
-   adb shell pm grant io.github.channelramble.multiappaudio android.permission.DUMP
-   adb shell cmd notification allow_listener io.github.channelramble.multiappaudio/io.github.channelramble.multiappaudio.MediaListener
-   ```
-3. Pull down the notification shade and use the **App volume** notification.
-
-Requirements: Android 12+ (built for Android 16/17).
-
-The findings behind each piece are in
-[docs/RESEARCH.md](https://github.com/channelramble/multiAPPaudio/blob/HEAD/docs/RESEARCH.md).
-
-### Undo
-
-`adb shell settings put system multi_audio_focus_enabled 0`, then
-`adb shell cmd appops set <pkg> TAKE_AUDIO_FOCUS default` (and `PLAY_AUDIO default`) for each app
-you changed. Reboot, and uninstall the app.
+What each line does, first-time ADB setup, and uninstalling are in the
+[README](https://github.com/channelramble/multiAPPaudio#readme). Tested on a Pixel 10 Pro Fold
+(Android 17) and the Android 14 and 17 emulators. If something doesn't behave, use
+**Diagnostics > Copy report** in the app and open an issue with it.

@@ -91,6 +91,8 @@ jobs:
           out="MultiAppAudio-${TAG}.apk"
           cp "$apk" "$out"
           sha256sum "$out" > "$out.sha256"
+          # Same file under a fixed name, so releases/latest/download/MultiAppAudio.apk always works.
+          cp "$apk" MultiAppAudio.apk
           echo "APK=$out" >> "$GITHUB_ENV"
           cert="$(grep -m1 'certificate SHA-256 digest' signature.txt | awk '{print $NF}')"
           echo "CERT_SHA256=$cert" >> "$GITHUB_ENV"
@@ -122,9 +124,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
+            gh release upload "$TAG" "$APK" "$APK.sha256" MultiAppAudio.apk --clobber
             gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" "$APK" "$APK.sha256" \
+            gh release create "$TAG" "$APK" "$APK.sha256" MultiAppAudio.apk \
               --title "Multi-App Audio $TAG" --notes-file notes.md --target "$GITHUB_SHA"
           fi
