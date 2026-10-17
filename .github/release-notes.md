@@ -2,6 +2,12 @@
 several apps play at the same time and stops Android Auto from pausing YouTube. For Pixels and
 other phones running stock Android 12 or newer. No root: a one-time setup over ADB unlocks it.
 
+### New in 0.4.0
+
+- **- and + on the sliders.** Each app in the slider panel has - / + buttons beside its slider.
+- **1% steps by default.** The notification's and the panel's - / + now change the level by 1% a
+  tap; pick 2, 5, 10, 20 or 25% in the app.
+
 ### New in 0.3.0
 
 - **App volume from the notification shade.** It lists the apps playing right now. Expand the App

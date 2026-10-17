@@ -9,8 +9,8 @@ unlocks it, and from then on everything happens in the app.
 
 * **Per-app volume.** Turn YouTube down to 40% while Spotify stays at 100%. Pull down the
   notification shade and the **App volume** notification lists what's playing right now:
-  * expand it for **- / +** buttons (10% per tap, or 5, 20 or 25%),
-  * tap it for **sliders** that open over whatever app you're using,
+  * expand it for **- / +** buttons (1% per tap, or 2, 5, 10, 20 or 25%),
+  * tap it for **sliders** that open over whatever app you're using, with - / + beside each,
   * or use the **App volume Quick Settings tile**.
 
   Each app's level is remembered and applies whenever it plays. Need more than 100%? Turn on
@@ -86,7 +86,8 @@ Android stores each of these and re-applies it at every boot.
 * The collapsed **App volume** notification shows each playing app and its level, like
   `YouTube 40% · Spotify 100%`.
 * Expand it for **-** and **+** on each app.
-* Tap it for sliders. Tap an app's speaker icon to mute it, or its percentage to reset it to 100%.
+* Tap it for sliders, with **-** and **+** beside each for fine steps. Tap an app's speaker icon to
+  mute it, or its percentage to reset it to 100%.
 * The Quick Settings tile opens the same sliders.
 
 Only apps playing right now are listed. An app drops off a few seconds after it stops, and its
@@ -95,7 +96,8 @@ level comes back when it plays again.
 **In the Multi-App Audio app:**
 
 * **App volume:** **Allow boost above 100%** (up to 200%), **Each - / + tap changes volume by**
-  (5, 10, 20 or 25%), **Keep the App volume notification**, and **Reset all to 100%**.
+  (1, 2, 5, 10, 20 or 25%; 1% by default), **Keep the App volume notification**, and **Reset all
+  to 100%**.
 * **Multi-app audio:** shows whether it's on, and **Resume media after calls**.
 * **Android Auto:** **Choose apps** to add more pass-through apps besides YouTube, plus **Undo
   automatic source switches** and **Pause pass-through apps during calls**.

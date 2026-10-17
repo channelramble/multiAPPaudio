@@ -41,7 +41,7 @@ class Config(private val prefs: SharedPreferences) {
     /** Top of the App volume controls: 100%, or 200% with boost on. */
     val maxPercent: Int get() = if (allowBoost) AppVolumes.MAX_PERCENT else 100
 
-    /** How much each tap on the notification's - / + buttons changes an app's level, in percent. */
+    /** How much each tap on the - / + buttons (notification and panel) changes an app's level, in percent. */
     var volumeStep: Int
         get() = prefs.getInt(KEY_VOLUME_STEP, DEFAULT_VOLUME_STEP).takeIf { it in VOLUME_STEPS } ?: DEFAULT_VOLUME_STEP
         set(v) = prefs.edit().putInt(KEY_VOLUME_STEP, v).apply()
@@ -87,8 +87,8 @@ class Config(private val prefs: SharedPreferences) {
         private const val KEY_VOLUME_NOTIFICATION = "volume_notification"
         private const val KEY_ALLOW_BOOST = "allow_boost"
         private const val KEY_VOLUME_STEP = "volume_step"
-        const val DEFAULT_VOLUME_STEP = 10
-        val VOLUME_STEPS = listOf(5, 10, 20, 25)
+        const val DEFAULT_VOLUME_STEP = 1
+        val VOLUME_STEPS = listOf(1, 2, 5, 10, 20, 25)
         private const val KEY_PASS_THROUGH = "pass_through_pkgs"
         private const val KEY_MUTED = "muted_pkgs"
         private const val KEY_GUARD = "aa_guard"

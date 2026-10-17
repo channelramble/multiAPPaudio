@@ -237,12 +237,14 @@ class MixerActivity : Activity() {
         }
         // Pulled left so the speaker lines up under the app icon.
         bottom.addView(mute, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = -dp(8) })
+        bottom.addView(stepButton(R.drawable.ic_remove, "${labels.label(pkg)} quieter") { nudge(pkg, up = false) })
         val seek = SeekBar(this).apply {
             max = config.maxPercent
             styleSlider(this, notchAt100 = max > 100)
             contentDescription = "${labels.label(pkg)} volume"
         }
         bottom.addView(seek, LinearLayout.LayoutParams(0, dp(44), 1f))
+        bottom.addView(stepButton(R.drawable.ic_add, "${labels.label(pkg)} louder") { nudge(pkg, up = true) })
         val percent = text("", 14f, onSurface).apply {
             gravity = Gravity.END or Gravity.CENTER_VERTICAL
             fontFeatureSettings = "tnum"
@@ -321,6 +323,13 @@ class MixerActivity : Activity() {
         val row = rows[pkg] ?: return
         if (!fromSlider) row.seek.progress = percent
         showLevel(row, percent)
+    }
+
+    /** The - / + beside each slider: one step (Settings, 1% by default), like the notification's. */
+    private fun nudge(pkg: String, up: Boolean) {
+        val current = level(pkg)
+        val next = AppVolumes.stepPercent(current, up, config.maxPercent, config.volumeStep)
+        if (next != current) setLevel(pkg, next)
     }
 
     private fun toggleMute(pkg: String) {
@@ -413,6 +422,19 @@ class MixerActivity : Activity() {
         text = s
         setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
         setTextColor(color)
+    }
+
+    /** Small round tonal button, the same look as the notification's - / +. */
+    private fun stepButton(icon: Int, description: String, onClick: () -> Unit) = ImageButton(this).apply {
+        setImageResource(icon)
+        background = getDrawable(R.drawable.mixer_button_bg)
+        scaleType = ImageView.ScaleType.CENTER
+        contentDescription = description
+        setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(dp(36), dp(36)).apply {
+            marginStart = dp(4)
+            marginEnd = dp(4)
+        }
     }
 
     private fun flatButton(label: String, onClick: () -> Unit) =
