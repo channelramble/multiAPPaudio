@@ -18,6 +18,7 @@ import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -105,7 +106,7 @@ class MixerActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        main.removeCallbacks(poll)
+        main.removeCallbacksAndMessages(null) // the poll, and any held - / + still repeating
         AudioControlService.panelOpen = false
         AudioControlService.refresh(this)
     }
@@ -237,14 +238,14 @@ class MixerActivity : Activity() {
         }
         // Pulled left so the speaker lines up under the app icon.
         bottom.addView(mute, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginStart = -dp(8) })
-        bottom.addView(stepButton(R.drawable.ic_remove, "${labels.label(pkg)} quieter") { nudge(pkg, up = false) })
+        bottom.addView(stepButton(R.drawable.ic_remove, "${labels.label(pkg)} quieter", pkg, up = false))
         val seek = SeekBar(this).apply {
             max = config.maxPercent
             styleSlider(this, notchAt100 = max > 100)
             contentDescription = "${labels.label(pkg)} volume"
         }
         bottom.addView(seek, LinearLayout.LayoutParams(0, dp(44), 1f))
-        bottom.addView(stepButton(R.drawable.ic_add, "${labels.label(pkg)} louder") { nudge(pkg, up = true) })
+        bottom.addView(stepButton(R.drawable.ic_add, "${labels.label(pkg)} louder", pkg, up = true))
         val percent = text("", 14f, onSurface).apply {
             gravity = Gravity.END or Gravity.CENTER_VERTICAL
             fontFeatureSettings = "tnum"
@@ -424,13 +425,43 @@ class MixerActivity : Activity() {
         setTextColor(color)
     }
 
-    /** Small round tonal button, the same look as the notification's - / +. */
-    private fun stepButton(icon: Int, description: String, onClick: () -> Unit) = ImageButton(this).apply {
+    /**
+     * Small round tonal button, the same look as the notification's - / +. A tap moves one step;
+     * held for [HOLD_DELAY_MS] it keeps going by [HOLD_PERCENT] every [HOLD_REPEAT_MS] until let go.
+     */
+    private fun stepButton(icon: Int, description: String, pkg: String, up: Boolean) = ImageButton(this).apply {
         setImageResource(icon)
         background = getDrawable(R.drawable.mixer_button_bg)
         scaleType = ImageView.ScaleType.CENTER
         contentDescription = description
-        setOnClickListener { onClick() }
+        var held = false
+        val repeat = object : Runnable {
+            override fun run() {
+                if (!held) {
+                    held = true
+                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                }
+                val current = level(pkg)
+                val next = (current + if (up) HOLD_PERCENT else -HOLD_PERCENT).coerceIn(0, config.maxPercent)
+                if (next != current) setLevel(pkg, next)
+                main.postDelayed(this, HOLD_REPEAT_MS)
+            }
+        }
+        setOnTouchListener { _, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    held = false
+                    dragging++ // keep the rows (and this button) in place while it's down
+                    main.postDelayed(repeat, HOLD_DELAY_MS)
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    main.removeCallbacks(repeat)
+                    dragging--
+                }
+            }
+            false // the button still draws its ripple and gets the tap
+        }
+        setOnClickListener { if (!held) nudge(pkg, up) }
         layoutParams = LinearLayout.LayoutParams(dp(36), dp(36)).apply {
             marginStart = dp(4)
             marginEnd = dp(4)
@@ -482,6 +513,9 @@ class MixerActivity : Activity() {
         private const val ANIM_IN_MS = 260L
         private const val ANIM_OUT_MS = 180L
         private const val DETENT = 4
+        private const val HOLD_DELAY_MS = 2_000L
+        private const val HOLD_REPEAT_MS = 500L
+        private const val HOLD_PERCENT = 1
         private const val SCRIM = 0x66000000
         private const val WIDE_SCREEN_DP = 600
         private const val SHEET_MAX_WIDTH_DP = 560

@@ -2,6 +2,11 @@
 several apps play at the same time and stops Android Auto from pausing YouTube. For Pixels and
 other phones running stock Android 12 or newer. No root: a one-time setup over ADB unlocks it.
 
+### New in 0.5.0
+
+- **Hold - or + in the slider panel** for 2 seconds and the level keeps moving by 1% every half
+  second until you let go. A quick tap still moves one step.
+
 ### New in 0.4.0
 
 - **- and + on the sliders.** Each app in the slider panel has - / + buttons beside its slider.

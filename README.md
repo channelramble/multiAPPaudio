@@ -86,8 +86,9 @@ Android stores each of these and re-applies it at every boot.
 * The collapsed **App volume** notification shows each playing app and its level, like
   `YouTube 40% · Spotify 100%`.
 * Expand it for **-** and **+** on each app.
-* Tap it for sliders, with **-** and **+** beside each for fine steps. Tap an app's speaker icon to
-  mute it, or its percentage to reset it to 100%.
+* Tap it for sliders, with **-** and **+** beside each for fine steps; hold one for 2 seconds and it
+  keeps going by 1% every half second. Tap an app's speaker icon to mute it, or its percentage to
+  reset it to 100%.
 * The Quick Settings tile opens the same sliders.
 
 Only apps playing right now are listed. An app drops off a few seconds after it stops, and its
